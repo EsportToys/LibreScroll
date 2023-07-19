@@ -1,5 +1,5 @@
 # LibreScroll
-Smooth inertial scrolling with any regular mouse.
+Smooth inertial scrolling on Windows with any regular mouse.
 
 ### [Download Here](https://github.com/EsportToys/LibreScroll/releases)
 
