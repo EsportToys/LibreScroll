@@ -3,7 +3,8 @@ Smooth inertial scrolling with any regular mouse.
 
 ### [Download Here](https://github.com/EsportToys/LibreScroll/releases)
 
-https://github.com/EsportToys/LibreScroll/assets/98432183/8bbec057-65aa-4d37-b726-42913cafded1
+https://github.com/EsportToys/LibreScroll/assets/98432183/c7fc05a5-6b10-4b91-9984-0d809a52b025
+
 
 ## Instructions
 1. Run LibreScroll
