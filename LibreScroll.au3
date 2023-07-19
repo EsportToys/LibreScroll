@@ -102,7 +102,7 @@ Func UpdateTIp()
      TraySetToolTip('LibreScroll - ' & ( ProcessExists($g_childPID) ? 'Active' : 'Inactive') )
 EndFunc
 Func Info()
-     MsgBox(0,'About LibreScroll','Visit https://github.com/EsportToys/LibreScroll for more info.')
+     MsgBox(0,'About LibreScroll v1.0','Visit https://github.com/EsportToys/LibreScroll for more info.')
 EndFunc
 Func Quit()
      Exit
