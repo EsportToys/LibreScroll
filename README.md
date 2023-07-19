@@ -42,7 +42,7 @@ Press any button again (or move the actual wheel) to stop the momentum.
 ### Pause/Unpause
 Temporarily disable the utility if you need to use the unmodified behavior in another app.
 
-This kills the worker process, which can be restarted by clickig Unpause or Apply
+This kills the worker process, which can be restarted by clickig Unpause or Apply.
 
 ### Apply
 After modifying the preference, click this to apply the configuration as displayed.
