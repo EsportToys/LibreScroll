@@ -224,7 +224,14 @@ EndFunc
 
 Func Tick($ticks)
      Local Static $qpf = DllCall($kernel32dll,'bool','QueryPerformanceFrequency','int64*',Null)[1]
-     If Not $g_trigger_isDown Then 
+     If $g_trigger_isDown Then 
+        Local $deltaX = $g_scrollAccu[0]
+        Local $deltaY = $g_scrollAccu[1]
+        $g_scrollVel[0] += $deltaX*$g_sensitivity_x
+        $g_scrollVel[1] += $deltaY*$g_sensitivity_y
+        $g_scrollAccu[0] -= $deltaX
+        $g_scrollAccu[1] -= $deltaY
+     Else
         If $g_flickMode Then 
            $g_scrollAccu[0]=0
            $g_scrollAccu[1]=0
@@ -232,12 +239,6 @@ Func Tick($ticks)
            Return
         EndIf
      EndIf
-     Local $deltaX = $g_scrollAccu[0]
-     Local $deltaY = $g_scrollAccu[1]
-     $g_scrollVel[0] += $deltaX*$g_sensitivity_x
-     $g_scrollVel[1] += $deltaY*$g_sensitivity_y
-     $g_scrollAccu[0] -= $deltaX
-     $g_scrollAccu[1] -= $deltaY
      Local $dt = $ticks/$qpf
      Local $mu = $g_damping
      Local $f0 = Exp(-$dt * $mu)
