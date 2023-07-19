@@ -38,7 +38,7 @@ Func Parent()
      GUICtrlSetTip($sensX,'Horizontal scrolling sensitivity. Set a negative number for reverse scrolling.')
      GUICtrlSetTip($stepY,'How many scroll counts to accumulate before sending.' & @CRLF & 'A regular coarse scroll step is 120.')
      GUICtrlSetTip($stepX,'How many scroll counts to accumulate before sending.' & @CRLF & 'A regular coarse scroll step is 120.')
-     GUICtrlSetTip($flick,'Continue scrolling even after mouse3 is released.')
+     GUICtrlSetTip($flick,'Continue scrolling even after mouse3 is released.' & @CRLF & 'The momentum can be reset by clicking any button or moving the wheel.')
      Local $str = ''
      $str &= Number(GUICtrlRead($sensX)) & ' '
      $str &= Number(GUICtrlRead($sensY)) & ' '
