@@ -38,7 +38,7 @@ Func Parent()
      GUICtrlSetTip($sensX,'Horizontal scrolling sensitivity. Set a negative number for reverse scrolling.')
      GUICtrlSetTip($stepY,'How many scroll counts to accumulate before sending.' & @CRLF & 'A regular coarse scroll step is 120.')
      GUICtrlSetTip($stepX,'How many scroll counts to accumulate before sending.' & @CRLF & 'A regular coarse scroll step is 120.')
-     GUICtrlSetTip($flick,'Continue scrolling even after mouse3 is released.')
+     GUICtrlSetTip($flick,'Continue scrolling even after mouse3 is released.' & @CRLF & 'The momentum can be reset by clicking any button or moving the wheel.')
      Local $str = ''
      $str &= Number(GUICtrlRead($sensX)) & ' '
      $str &= Number(GUICtrlRead($sensY)) & ' '
@@ -102,7 +102,7 @@ Func UpdateTIp()
      TraySetToolTip('LibreScroll - ' & ( ProcessExists($g_childPID) ? 'Active' : 'Inactive') )
 EndFunc
 Func Info()
-     MsgBox(0,'About LibreScroll v1.0','Visit https://github.com/EsportToys/LibreScroll for more info.')
+     MsgBox(0,'About LibreScroll v1.0.1','Visit https://github.com/EsportToys/LibreScroll for more info.')
 EndFunc
 Func Quit()
      Exit
@@ -224,7 +224,14 @@ EndFunc
 
 Func Tick($ticks)
      Local Static $qpf = DllCall($kernel32dll,'bool','QueryPerformanceFrequency','int64*',Null)[1]
-     If Not $g_trigger_isDown Then 
+     If $g_trigger_isDown Then 
+        Local $deltaX = $g_scrollAccu[0]
+        Local $deltaY = $g_scrollAccu[1]
+        $g_scrollVel[0] += $deltaX*$g_sensitivity_x
+        $g_scrollVel[1] += $deltaY*$g_sensitivity_y
+        $g_scrollAccu[0] -= $deltaX
+        $g_scrollAccu[1] -= $deltaY
+     Else
         If $g_flickMode Then 
            $g_scrollAccu[0]=0
            $g_scrollAccu[1]=0
@@ -232,12 +239,6 @@ Func Tick($ticks)
            Return
         EndIf
      EndIf
-     Local $deltaX = $g_scrollAccu[0]
-     Local $deltaY = $g_scrollAccu[1]
-     $g_scrollVel[0] += $deltaX*$g_sensitivity_x
-     $g_scrollVel[1] += $deltaY*$g_sensitivity_y
-     $g_scrollAccu[0] -= $deltaX
-     $g_scrollAccu[1] -= $deltaY
      Local $dt = $ticks/$qpf
      Local $mu = $g_damping
      Local $f0 = Exp(-$dt * $mu)
