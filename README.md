@@ -12,8 +12,8 @@ https://github.com/EsportToys/LibreScroll/assets/98432183/c7fc05a5-6b10-4b91-998
 3. Release middle-mouse-button to halt scroll momentum and release the cursor.
 
 ## Options
+![image](https://github.com/EsportToys/LibreScroll/assets/98432183/2bd2ac5a-e8e7-43ec-a52d-abef302f2bab)
 
-![image](https://github.com/EsportToys/LibreScroll/assets/98432183/4980aadb-e5d4-4a52-a23f-27506e6cf934)
 
 ### Friction
 The rate at which momentum decays.
