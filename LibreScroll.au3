@@ -117,7 +117,7 @@ Func CloseChild()
      $g_childPID = Null
 EndFunc
 Func StartChild($argStr)
-     Global $g_childPID = Run(@AutoItExe & ' ' & @ScriptName & ' ' & @AutoItPID & ' ' & $argStr)
+     Global $g_childPID = Run(@AutoItExe & ' ' & @ScriptFullPath & ' ' & @AutoItPID & ' ' & $argStr)
      If $g_childPID Then 
         OnAutoItExitRegister ( CloseChild )
      Else
