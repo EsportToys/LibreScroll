@@ -2,8 +2,9 @@
 
 If $CmdLine[0]==7 Then
    Child($CmdLine)
-ElseIf _Singleton('LibreScroll',0) Then
-   Parent()
+Else
+   If IsAdmin() Then Sleep(100)
+   If _Singleton('LibreScroll',0) Then Parent()
 EndIf
 
 Func Parent()
@@ -11,6 +12,7 @@ Func Parent()
      Opt('TrayAutoPause',0)
      Opt('TrayOnEventMode',1)
      Opt('TrayMenuMode',1+2)
+     If Not IsAdmin() Then TrayItemSetOnEvent(TrayCreateItem('Restart as admin'),Elevate)
      TrayItemSetOnEvent(TrayCreateItem('About LibreScroll'),Info)
      TrayItemSetOnEvent(TrayCreateItem('Quit'),Quit)
      Global $g_hWnd = GUICreate('LibreScroll options',215,185,Default,Default,0x00C80000)
@@ -98,11 +100,16 @@ Func Unhide()
      GUISetState(@SW_SHOW,$g_hWnd)
      GUISetState(@SW_RESTORE,$g_hWnd)
 EndFunc
-Func UpdateTIp()
+Func UpdateTip()
      TraySetToolTip('LibreScroll - ' & ( ProcessExists($g_childPID) ? 'Active' : 'Inactive') )
 EndFunc
 Func Info()
-     MsgBox(0,'About LibreScroll v1.0.1','Visit https://github.com/EsportToys/LibreScroll for more info.')
+     MsgBox(0,'About LibreScroll v1.0.2','Visit https://github.com/EsportToys/LibreScroll for more info.')
+EndFunc
+Func Elevate()
+     CloseChild()
+     ShellExecute( @AutoItExe , @Compiled ? '' : @ScriptFullPath , '' , 'runas' )
+     Exit
 EndFunc
 Func Quit()
      Exit
@@ -117,8 +124,8 @@ Func CloseChild()
      $g_childPID = Null
 EndFunc
 Func StartChild($argStr)
-     Global $g_childPID = Run(@AutoItExe & ' ' & @ScriptFullPath & ' ' & @AutoItPID & ' ' & $argStr)
-     If $g_childPID Then 
+     Global $g_childPID = Run(@AutoItExe & ' ' & (@Compiled?'':@ScriptFullPath) & ' ' & @AutoItPID & ' ' & $argStr)
+     If ProcessExists($g_childPID) Then 
         OnAutoItExitRegister ( CloseChild )
      Else
         Exit
@@ -196,7 +203,8 @@ Func WM_INPUT($h,$m,$w,$l)
            $g_scrollAccu[0] += $raw.LastX
            $g_scrollAccu[1] += $raw.LastY
         EndIf
-     EndIf   
+     EndIf
+     Return 0
 EndFunc
 
 Func SendCancel()
