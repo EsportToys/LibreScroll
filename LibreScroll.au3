@@ -306,6 +306,7 @@ EndFunc
 ; Author ........: Valik
 ; Modified.......:
 ; ===============================================================================================================================
+Global Const $tagSECURITY_ATTRIBUTES = "dword Length;ptr SecurityDescriptor;bool InheritHandle"
 Func _Singleton($sOccurrenceName, $iFlag = 0)
 	Local Const $ERROR_ALREADY_EXISTS = 183
 	Local Const $SECURITY_DESCRIPTOR_REVISION = 1
