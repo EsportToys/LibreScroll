@@ -1,331 +1,358 @@
 #NoTrayIcon
 
-If $CmdLine[0]==7 Then
-   Global $rect = DllStructCreate('long x1;long y1;long x2;long y2;');
-   Child($CmdLine)
+Const $user32dll = DllOpen("user32.dll")
+Const $kernel32dll = DllOpen("kernel32.dll")
+Const $qpf = DllCall($kernel32dll, "bool", "QueryPerformanceFrequency", "int64*", Null)[1]
+
+
+If $CmdLine[0] == 7 Then
+    WorkerMain($CmdLine)
 Else
-   If IsAdmin() Then Sleep(100)
-   DllCall("kernel32.dll", "handle", "CreateMutexW", "struct*", 0, "bool", 1, "wstr", "LibreScroll")
-   If 183 = DllCall("kernel32.dll", "dword", "GetLastError")[0] Then Exit
-   Parent()
+    DialogMain()
 EndIf
 
-Func Parent()
-     Opt("TrayIconHide", 0)
-     Opt('TrayAutoPause',0)
-     Opt('TrayOnEventMode',1)
-     Opt('TrayMenuMode',1+2)
-     If Not IsAdmin() Then TrayItemSetOnEvent(TrayCreateItem('Restart as admin'),Elevate)
-     TrayItemSetOnEvent(TrayCreateItem('About LibreScroll'),Info)
-     TrayItemSetOnEvent(TrayCreateItem('Options'),Unhide)
-     TrayItemSetOnEvent(TrayCreateItem('Quit'),Quit)
-     Global $g_hWnd = GUICreate('LibreScroll options',215,210,Default,Default,0x00C80000)
-     GUISetIcon('main.cpl',608)
-     TraySetOnEvent(-7,Unhide)
-     TraySetOnEvent(-11,UpdateTip)
-     TraySetClick(8)
-     TraySetIcon('main.cpl',608)
-     GUICtrlCreateLabel('Friction'      ,5,  5,100,20,0x0201)
-     GUICtrlCreateLabel('Y-Sensitivity' ,5, 30,100,20,0x0201)
-     GUICtrlCreateLabel('X-Sensitivity' ,5, 55,100,20,0x0201)
-     GUICtrlCreateLabel('Minimum Y Step',5, 80,100,20,0x0201)
-     GUICtrlCreateLabel('Minimum X Step',5,105,100,20,0x0201)
-     Local $decay = GUICtrlCreateInput(IniRead('options.ini','LibreScroll','decay',3) , 110 ,  5 , 100 , 20)
-     Local $sensY = GUICtrlCreateInput(IniRead('options.ini','LibreScroll','sensY',9) , 110 , 30 , 100 , 20)
-     Local $sensX = GUICtrlCreateInput(IniRead('options.ini','LibreScroll','sensX',0) , 110 , 55 , 100 , 20)
-     Local $stepY = GUICtrlCreateInput(IniRead('options.ini','LibreScroll','stepY',1) , 110 , 80 , 100 , 20)
-     Local $stepX = GUICtrlCreateInput(IniRead('options.ini','LibreScroll','stepX',1) , 110 ,105 , 100 , 20)
-     Local $flick = GUICtrlCreateCheckbox('Flick mode',110,130)
-                    GUICtrlSetState( $flick , 1=IniRead('options.ini','LibreScroll','flick',0) ? 1 : 4 )
-     Local $think = GUICtrlCreateCheckbox('ThinkPad mode',110,155)
-                    GUICtrlSetState( $think , 1=IniRead('options.ini','LibreScroll','think',0) ? 1 : 4 )
-     Local $pause = GUICtrlCreateButton('Pause',  5,180,100)
-     Local $apply = GUICtrlCreateButton('Apply',110,180,100)
-     GUICtrlSetTip($decay,'How quickly the momentum decays, by applying a drag force that is proportional to speed.')
-     GUICtrlSetTip($sensY,'Vertical scrolling sensitivity. Set a negative number for reverse scrolling.')
-     GUICtrlSetTip($sensX,'Horizontal scrolling sensitivity. Set a negative number for reverse scrolling.')
-     GUICtrlSetTip($stepY,'How many scroll counts to accumulate before sending.' & @CRLF & 'A regular coarse scroll step is 120.')
-     GUICtrlSetTip($stepX,'How many scroll counts to accumulate before sending.' & @CRLF & 'A regular coarse scroll step is 120.')
-     GUICtrlSetTip($flick,'Continue scrolling even after mouse3 is released.' & @CRLF & 'The momentum can be reset by clicking any button or moving the wheel.')
-     GUICtrlSetTip($think,'Emulate how ThinkPad TrackPoint scrolling works.' & @CRLF & 'Only X or Y scrolling is sent at any given time.')
-     Local $str = ''
-     $str &= Number(GUICtrlRead($sensX)) & ' '
-     $str &= Number(GUICtrlRead($sensY)) & ' '
-     $str &= Number(GUICtrlRead($decay)) & ' '
-     $str &= Round(GUICtrlRead($stepX)) & ' '
-     $str &= Round(GUICtrlRead($stepY)) & ' '
-     $str &= Number((1=GUICtrlRead($flick)) + (1=GUICtrlRead($think))*2) & ' '
-     StartChild($str)
-     While 1
+
+Func DialogMain()
+    DllCall($kernel32dll, "handle", "CreateMutexW", "struct*", 0, "bool", 1, "wstr", "LibreScroll")
+    If 183 == DllCall($kernel32dll, "dword", "GetLastError")[0] Then Exit
+
+    Opt("TrayIconHide", 0)
+    Opt("TrayAutoPause", 0)
+    Opt("TrayOnEventMode", 1)
+    Opt("TrayMenuMode", 3)
+
+    TrayItemSetOnEvent( TrayCreateItem("About LibreScroll") , DLG_Info   )
+    TrayItemSetOnEvent( TrayCreateItem("Options")           , DLG_Unhide )
+    TrayItemSetOnEvent( TrayCreateItem("Quit")              , DLG_Quit   )
+
+    TraySetOnEvent( -7  , DLG_Unhide    )
+    TraySetOnEvent( -11 , DLG_UpdateTip )
+    TraySetIcon( "main.cpl" , 608 )
+    TraySetClick(8)
+
+    Global $dlg_hwnd = GUICreate( "LibreScroll options" , 215 , 185 , Default , Default , 0x00C80000 )
+    GUISetIcon( "main.cpl" , 608 )
+
+    GUICtrlCreateLabel( "Friction"       , 5 ,   5 , 100 , 20 , 0x0201 )
+    GUICtrlCreateLabel( "Y-Sensitivity"  , 5 ,  30 , 100 , 20 , 0x0201 )
+    GUICtrlCreateLabel( "X-Sensitivity"  , 5 ,  55 , 100 , 20 , 0x0201 )
+    GUICtrlCreateLabel( "Minimum Y Step" , 5 ,  80 , 100 , 20 , 0x0201 )
+    GUICtrlCreateLabel( "Minimum X Step" , 5 , 105 , 100 , 20 , 0x0201 )
+
+    Local $decay = Number( IniRead("options.ini", "LibreScroll", "decay", 3)      )
+    Local $sensY = Number( IniRead("options.ini", "LibreScroll", "sensY", 18)     )
+    Local $sensX = Number( IniRead("options.ini", "LibreScroll", "sensX", 0)      )
+    Local $stepY = Round(  IniRead("options.ini", "LibreScroll", "stepY", 1)      )
+    Local $stepX = Round(  IniRead("options.ini", "LibreScroll", "stepX", 1)      )
+    Local $think = Number( IniRead("options.ini", "LibreScroll", "think", 0) == 1 )
+
+    Local $dlg_decay = GUICtrlCreateInput( $decay , 110 ,   5 , 100 , 20 )
+    Local $dlg_sensY = GUICtrlCreateInput( $sensY , 110 ,  30 , 100 , 20 )
+    Local $dlg_sensX = GUICtrlCreateInput( $sensX , 110 ,  55 , 100 , 20 )
+    Local $dlg_stepY = GUICtrlCreateInput( $stepY , 110 ,  80 , 100 , 20 )
+    Local $dlg_stepX = GUICtrlCreateInput( $stepX , 110 , 105 , 100 , 20 )
+    Local $dlg_think = GUICtrlCreateCheckbox( "ThinkPad mode" , 110 , 130 )
+                       GUICtrlSetState( $dlg_think , $think ? 1 : 4 )
+    Local $dlg_pause = GUICtrlCreateButton( "Pause" ,   5 , 155 , 100 )
+    Local $dlg_apply = GUICtrlCreateButton( "Apply" , 110 , 155 , 100 )
+
+    Global $dlg_worker_handle = Null
+    If Not DLG_SpawnWorker($sensX, $sensY, $decay, $stepX, $stepY, $think) Then
+        GUICtrlSetData($dlg_pause, "Unpause")
+    EndIf
+    OnAutoItExitRegister(DLG_KillWorker)
+
+    While 1
         Local $id = GUIGetMsg()
         Switch $id
-          Case -3
-               GUISetState(@SW_HIDE,$g_hWnd)
-          Case $decay
-               Local $value = Number(GUICtrlRead($id))
-               If $value<1 Then $value = 1
-               GUICtrlSetData($id,$value)
-          Case $sensX,$sensY
-               GUICtrlSetData($id,Number(GUICtrlRead($id)))
-          Case $stepX,$stepY
-               Local $value = Number(GUICtrlRead($id))
-               If $value<1 Then
-                  GUICtrlSetData($id,1)
-               ElseIf $value>120 Then
-                  GUICtrlSetData($id,120)
-               Else
-                  GUICtrlSetData($id,Round($value))
-               EndIf
-          Case $flick
-          Case $think
-          Case $apply,$pause 
-               If $id==$pause And GUICtrlRead($pause)=='Pause' Then 
-                  CloseChild()
-                  GUICtrlSetData($pause,'Unpause')
-               Else
-                  Local $arr = [ _ 
-                     Number(GUICtrlRead($sensX))   , _
-                     Number(GUICtrlRead($sensY))   , _
-                     Number(GUICtrlRead($decay))   , _
-                     Round(GUICtrlRead($stepX))    , _
-                     Round(GUICtrlRead($stepY))    , _
-                     Number((1=GUICtrlRead($flick)) + (1=GUICtrlRead($think))*2) _
-                  ]
-                  Local $str = $arr[0] & ' ' & $arr[1] & ' ' & $arr[2] & ' ' & $arr[3] & ' ' & $arr[4] & ' ' & $arr[5]
-                  RestartChild($str)
-                  GUICtrlSetData($pause,'Pause')
-                  IniWrite('options.ini','LibreScroll','sensX',$arr[0])
-                  IniWrite('options.ini','LibreScroll','sensY',$arr[1])
-                  IniWrite('options.ini','LibreScroll','decay',$arr[2])
-                  IniWrite('options.ini','LibreScroll','stepX',$arr[3])
-                  IniWrite('options.ini','LibreScroll','stepY',$arr[4])
-                  IniWrite('options.ini','LibreScroll','flick',BitAnd(1,$arr[5]) ? 1 : 0)
-                  IniWrite('options.ini','LibreScroll','think',BitAnd(2,$arr[5]) ? 1 : 0)
-               EndIf
+            Case -3
+                GUISetState(@SW_HIDE, $dlg_hwnd)
+            Case $dlg_decay
+                Local $value = Number(GUICtrlRead($id))
+                If $value < 1 Then $value = 1
+                GUICtrlSetData($id, $value)
+            Case $dlg_sensX, $dlg_sensY
+                GUICtrlSetData($id, Number(GUICtrlRead($id)))
+            Case $dlg_stepX, $dlg_stepY
+                Local $value = Number(GUICtrlRead($id))
+                If $value < 1 Then
+                    GUICtrlSetData($id, 1)
+                ElseIf $value > 120 Then
+                    GUICtrlSetData($id, 120)
+                Else
+                    GUICtrlSetData($id, Round($value))
+                EndIf
+            Case $dlg_think
+            Case $dlg_apply, $dlg_pause
+                DLG_KillWorker()
+                If $dlg_pause == $id And "Pause" == GUICtrlRead($dlg_pause) Then
+                    GUICtrlSetData($dlg_pause, "Unpause")
+                Else
+                    $sensX = Number( GUICtrlRead($dlg_sensX)      )
+                    $sensY = Number( GUICtrlRead($dlg_sensY)      )
+                    $decay = Number( GUICtrlRead($dlg_decay)      )
+                    $stepX = Round(  GUICtrlRead($dlg_stepX)      )
+                    $stepY = Round(  GUICtrlRead($dlg_stepY)      )
+                    $think = Number( GUICtrlRead($dlg_think) == 1 )
+                    IniWrite("options.ini", "LibreScroll", "sensX", $sensX)
+                    IniWrite("options.ini", "LibreScroll", "sensY", $sensY)
+                    IniWrite("options.ini", "LibreScroll", "decay", $decay)
+                    IniWrite("options.ini", "LibreScroll", "stepX", $stepX)
+                    IniWrite("options.ini", "LibreScroll", "stepY", $stepY)
+                    IniWrite("options.ini", "LibreScroll", "think", $think)
+                    If DLG_SpawnWorker($sensX, $sensY, $decay, $stepX, $stepY, $think) Then
+                        GUICtrlSetData($dlg_pause, "Pause")
+                    EndIf
+                EndIf
         EndSwitch
-     WEnd
-EndFunc
-Func Unhide()
-     GUISetState(@SW_SHOW,$g_hWnd)
-     GUISetState(@SW_RESTORE,$g_hWnd)
-EndFunc
-Func UpdateTip()
-     TraySetToolTip('LibreScroll - ' & ( ProcessExists($g_childPID) ? 'Active' : 'Inactive') )
-EndFunc
-Func Info()
-     MsgBox(0,'About LibreScroll v1.2','Visit https://github.com/EsportToys/LibreScroll for more info.')
-EndFunc
-Func Elevate()
-     CloseChild()
-     ShellExecute( @AutoItExe , @Compiled ? '' : @ScriptFullPath , '' , 'runas' )
-     Exit
-EndFunc
-Func Quit()
-     Exit
-EndFunc
-Func RestartChild($argStr)
-     CloseChild()
-     StartChild($argStr)
-EndFunc
-Func CloseChild()
-     OnAutoItExitUnRegister ( CloseChild )
-     If $g_childPID Then ProcessClose($g_childPID)
-     $g_childPID = Null
-EndFunc
-Func StartChild($argStr)
-     Global $g_childPID = Run(@AutoItExe & ' ' & (@Compiled?'':@ScriptFullPath) & ' ' & @AutoItPID & ' ' & $argStr)
-     If ProcessExists($g_childPID) Then 
-        ProcessSetPriority ( $g_childPID, 3 )
-        OnAutoItExitRegister ( CloseChild )
-     Else
-        Exit
-     EndIf
+    WEnd
 EndFunc
 
-Func Child($args)
-     If Not ProcessExists($args[1]) Then Return
-     Global $g_sensitivity_x = Number($args[2])
-     Global $g_sensitivity_y = Number($args[3])
-     Global $g_damping = $args[4]>0 ? $args[4] : 3
-     Global $g_threshold_x = $args[5]>1 ? $args[5] : 1
-     Global $g_threshold_y = $args[6]>1 ? $args[6] : 1
-     Global $g_flickMode = BitAnd(1,Number($args[7])) ? True : False
-     Global $g_thinkMode = BitAnd(2,Number($args[7])) ? True : False
-
-     Global Const $user32dll = DllOpen('user32.dll')
-     Global Const $kernel32dll = DllOpen('kernel32.dll')
-     Global $g_scrollVel = [0,0]
-     Global $g_scrollAccu = [0,0]
-     Global $g_trigger_isDown = False
-     Global $g_cancel_pending = False
-     Local $_ = DllStructCreate('ushort page;ushort usage;dword flags;hwnd target')
-     Local $size = DllStructGetSize($_)
-     $_.page = 1
-     $_.usage = 2
-     $_.flags = 256
-     $_.target = GUICreate('')
-     DllCall('user32.dll','bool','SetProcessDPIAware')
-     DllCall('user32.dll','bool','RegisterRawInputDevices','struct*',$_,'uint',1,'uint',$size)
-     GUIRegisterMsg(0xFF,WM_INPUT)
-     Local $time = Now()
-     While Sleep(10)
-         Local $now = Now()
-         Tick($now-$time)
-         $time = $now
-     WEnd
+Func DLG_Unhide()
+    GUISetState(@SW_SHOW, $dlg_hwnd)
+    GUISetState(@SW_RESTORE, $dlg_hwnd)
 EndFunc
 
-Func Now()
-     Return DllCall($kernel32dll,'bool','QueryPerformanceCounter','uint64*',Null)[1]
+Func DLG_UpdateTip()
+    TraySetToolTip("LibreScroll - " & ( ProcessExists($dlg_worker_handle) ? "Active" : "Inactive") )
 EndFunc
 
-Func WM_INPUT($h,$m,$w,$l)
-     Local Static $HEAD = 'struct;dword Type;dword Size;handle hDevice;wparam wParam;endstruct;'
-     Local Static $MOU = $HEAD & 'ushort Flags;ushort Alignment;ushort ButtonFlags;short ButtonData;ulong RawButtons;long LastX;long LastY;ulong ExtraInformation;'
-     Local Static $raw = DllStructCreate($MOU)
-     Local Static $size = DllStructGetSize($raw)
-     Local Static $headsize = DllStructGetSize(DllStructCreate($HEAD))
-     DllCall ( $user32dll,'uint','GetRawInputData','handle',$l,'uint',0x10000003,'struct*',$raw,'uint*',$size,'uint',$headsize)
-     If $raw.hDevice Then
-        If $raw.ButtonFlags Then
-           If BitAnd(32,$raw.ButtonFlags) Then
-              $g_trigger_isDown = False
-              $g_cancel_pending = False
-              If Not $g_flickMode Then
-                 $g_scrollVel[0] = 0
-                 $g_scrollVel[1] = 0
-              EndIf
-              DllCall($user32dll,'bool','ClipCursor','struct*',Null)
-           ElseIf BitAnd(16,$raw.ButtonFlags) Then
-              $g_scrollAccu[0] = 0
-              $g_scrollAccu[1] = 0
-              $g_scrollVel[0] = 0
-              $g_scrollVel[1] = 0
-              $g_trigger_isDown = True
-              $g_cancel_pending = True
-              DllCall($user32dll,'bool','GetCursorPos','struct*',$rect)
-              $rect.x2 = $rect.x1 + 1
-              $rect.y2 = $rect.y1 + 1
-              DllCall($user32dll,'bool','ClipCursor','struct*',$rect)
-           ElseIf $g_flickMode And Not $g_trigger_isDown Then 
-              $g_scrollVel[1] = 0 
-              $g_scrollVel[0] = 0 
-           EndIf
-        Else 
-           $g_scrollAccu[0] += $raw.LastX
-           $g_scrollAccu[1] += $raw.LastY
+Func DLG_Info()
+    MsgBox(0, "About LibreScroll v1.2", "Visit https://github.com/EsportToys/LibreScroll for more info.")
+EndFunc
+
+Func DLG_Quit()
+    Exit
+EndFunc
+
+Func DLG_KillWorker()
+    If $dlg_worker_handle Then
+        If ProcessExists($dlg_worker_handle) Then
+            ProcessClose($dlg_worker_handle)
         EndIf
-     EndIf
-     Return 0
+        $dlg_worker_handle = Null
+    EndIf
+EndFunc
+
+Func DLG_SpawnWorker($sensX, $sensY, $decay, $stepX, $stepY, $think)
+    If $dlg_worker_handle Then Return
+    Const $arg = $sensX & " " & $sensY & " " & $decay & " " & $stepX & " " & $stepY & " " & $think
+    $dlg_worker_handle = Run(@AutoItExe & " " & ( @Compiled ? "" : @ScriptFullPath ) & " " & @AutoItPID & " " & $arg)
+    If ProcessExists($dlg_worker_handle) Then 
+        ProcessSetPriority( $dlg_worker_handle, 3 )
+        Return True
+    Else
+        Return False
+    EndIf
+EndFunc
+
+Func WorkerMain($args)
+    If Not ProcessExists($args[1]) Then Return
+
+    Global Const $wkr_sens_x = Number($args[2])
+    Global Const $wkr_sens_y = Number($args[3])
+    Global Const $wkr_damp = ($args[4] > 0) ? $args[4] : 3
+    Global Const $wkr_thresh_x = ($args[5] > 1) ? $args[5] : 1
+    Global Const $wkr_thresh_y = ($args[6] > 1) ? $args[6] : 1
+    Global Const $wkr_think = Number($args[7]) ? True : False
+
+    Global $wkr_clipRect = DllStructCreate("long x1;long y1;long x2;long y2;");
+    Global $wkr_scrollVel = [0, 0]
+    Global $wkr_scrollAccu = [0, 0]
+    Global $wkr_trigger_isDown = False
+    Global $wkr_cancel_pending = False
+    Global $wkr_last_send_time = 0
+    Global $wkr_timer_fn = DllCallbackGetPtr(DllCallbackRegister("WKR_TimerProc", "none", "hwnd;uint;uint_ptr;dword"))
+
+    DllCall($user32dll, "bool", "SetProcessDPIAware")
+
+    Local $raw = DllStructCreate("ushort page; ushort usage; dword flags; hwnd target")
+    Const $rawSize = DllStructGetSize($raw)
+    $raw.page = 1
+    $raw.usage = 2
+    $raw.flags = 256
+    $raw.target = GUICreate("")
+    DllCall($user32dll, "bool", "RegisterRawInputDevices", "struct*", $raw, "uint", 1, "uint", $rawSize)
+    GUIRegisterMsg(0x00FF, WKR_Rawinput)  
+
+    Do 
+    Until -3 == GUIGetMsg()
+EndFunc
+
+Func WKR_Rawinput($h, $m, $w, $l)
+    Static $HEAD = "struct;dword Type;dword Size;handle hDevice;wparam wParam;endstruct;"
+    Static $MOU = $HEAD & "ushort Flags;ushort Alignment;ushort ButtonFlags;short ButtonData;ulong RawButtons;long LastX;long LastY;ulong ExtraInformation;"
+    Static $raw = DllStructCreate($MOU)
+    Static $size = DllStructGetSize($raw)
+    Static $headsize = DllStructGetSize(DllStructCreate($HEAD))
+
+    Const $qpc = DllCall($kernel32dll, "bool", "QueryPerformanceCounter", "int64*", Null)[1]
+
+    DllCall($user32dll, "uint", "GetRawInputData", "handle", $l, "uint", 0x10000003, "struct*", $raw, "uint*", $size, "uint", $headsize)
+
+    If $raw.hDevice Then
+        If $raw.ButtonFlags Then
+            If BitAnd(32, $raw.ButtonFlags) Then
+                $wkr_trigger_isDown = False
+                $wkr_cancel_pending = False
+                $wkr_scrollVel[0] = 0
+                $wkr_scrollVel[1] = 0
+                DllCall($user32dll, "bool", "ClipCursor", "struct*", Null)
+                DllCall($user32dll, "bool", "KillTimer", "hwnd", $h, "uint_ptr", 0x420)
+            ElseIf BitAnd(16, $raw.ButtonFlags) Then
+                $wkr_scrollAccu[0] = 0
+                $wkr_scrollAccu[1] = 0
+                $wkr_scrollVel[0] = 0
+                $wkr_scrollVel[1] = 0
+                $wkr_trigger_isDown = True
+                $wkr_cancel_pending = True
+                $wkr_last_send_time = $qpc
+                DllCall($user32dll, "bool", "GetCursorPos", "struct*", $wkr_clipRect)
+                $wkr_clipRect.x2 = $wkr_clipRect.x1 + 1
+                $wkr_clipRect.y2 = $wkr_clipRect.y1 + 1
+                DllCall($user32dll, "bool", "ClipCursor", "struct*", $wkr_clipRect)
+                DllCall($user32dll, "uint_ptr", "SetTimer", "hwnd", $h, "uint_ptr", 0x420, "uint", 0, "ptr", $wkr_timer_fn)
+            EndIf
+        ElseIf $wkr_trigger_isDown Then
+            $wkr_scrollAccu[0] += $raw.LastX
+            $wkr_scrollAccu[1] += $raw.LastY
+        EndIf
+    EndIf
+
+    If ($qpc - $wkr_last_send_time) * 1000 > $qpf * 4 Then
+        WKR_TimerProc(Null, 0, 0, 0)
+    EndIf
+
+    Return 0
 EndFunc
 
 Func SendCancel()
-     Local Static $SIZE = DllStructGetSize(DllStructCreate('dword;struct;long;long;dword;dword;dword;ulong_ptr;endstruct;'))
-     Local Static $arr = CancelStruct()
-     DllCall( $user32dll, 'uint', 'SendInput', 'uint', 2, 'struct*', $arr, 'int', $SIZE )
+    Local Static $tag = 'dword; struct; word; word; dword; dword; ulong_ptr; byte[8]; endstruct;'
+    Local Static $size = DllStructGetSize(DllStructCreate($tag))
+    Local Static $buf = DllStructCreate('byte[' & $size * 2 & ']')
+    Local Static $ptr = DllStructGetPtr($buf)
+    Local Static $_ = SetupCancelData($tag, $ptr, $ptr + $size)
+    DllCall($user32dll, 'uint', 'SendInput', 'uint', 2, 'struct*', $ptr, 'int', $size)
 EndFunc
 
-Func CancelStruct()
-     Local $SIZE = DllStructGetSize(DllStructCreate('dword;struct;long;long;dword;dword;dword;ulong_ptr;endstruct;'))
-     Local $arr = DllStructCreate('byte[' & $SIZE*2 & ']')
-     Local $ptr = DllStructGetPtr($arr)
-     Local $struct = DllStructCreate('dword;struct;word;word;dword;dword;ulong_ptr;endstruct;byte[8]',$ptr)
-     DllStructSetData($struct,1,1)
-     DllStructSetData($struct,2,0)
-     DllStructSetData($struct,3,0)
-     DllStructSetData($struct,4,0)
-     Local $struct = DllStructCreate('dword;struct;word;word;dword;dword;ulong_ptr;endstruct;byte[8]',$ptr+$SIZE)
-     DllStructSetData($struct,1,1)
-     DllStructSetData($struct,2,0)
-     DllStructSetData($struct,3,0)
-     DllStructSetData($struct,4,2)
-     Return $arr
+Func SetupCancelData($tag, $ptrdn, $ptrup)
+    Local $keydn = DllStructCreate($tag, $ptrdn)
+    DllStructSetData($keydn, 1, 1)
+    DllStructSetData($keydn, 2, 0)
+    DllStructSetData($keydn, 3, 0)
+    DllStructSetData($keydn, 4, 0)
+    Local $keyup = DllStructCreate($tag, $ptrup)
+    DllStructSetData($keyup, 1, 1)
+    DllStructSetData($keyup, 2, 0)
+    DllStructSetData($keyup, 3, 0)
+    DllStructSetData($keyup, 4, 2)
 EndFunc
 
-Func Tick($ticks)
-     Local Static $qpf = DllCall($kernel32dll,'bool','QueryPerformanceFrequency','int64*',Null)[1]
-     Local Static $current_rect = DllStructCreate('long x1;long y1;long x2;long y2;');
-     If $g_trigger_isDown Then
-        DllCall($user32dll,'bool','GetClipCursor','struct*',$current_rect)
-        If $current_rect.x1 <> $rect.x1 or $current_rect.x2 <> $rect.x2 or $current_rect.y1 <> $rect.y1 or $current_rect.y2 <> $rect.y2 Then
-           DllCall($user32dll,'bool','ClipCursor','struct*',$rect)
+Func WKR_TimerProc($hWnd, $uMsg, $idEvent, $sysTick)
+    If Not $wkr_trigger_isDown Then Return
+
+    Static $rect = DllStructCreate("long x1; long y1; long x2; long y2;");
+    Const $qpc = DllCall($kernel32dll, "bool", "QueryPerformanceCounter", "int64*", Null)[1]
+
+    If Not $uMsg == 0x0113 Then
+        DllCall($user32dll, "bool", "GetClipCursor", "struct*", $rect)
+        If $rect.x1 <> $wkr_clipRect.x1 or $rect.x2 <> $wkr_clipRect.x2 or $rect.y1 <> $wkr_clipRect.y1 or $rect.y2 <> $wkr_clipRect.y2 Then
+            DllCall($user32dll, "bool", "ClipCursor", "struct*", $wkr_clipRect)
         EndIf
-        Local $deltaX = $g_scrollAccu[0]
-        Local $deltaY = $g_scrollAccu[1]
-        $g_scrollVel[0] += $deltaX*$g_sensitivity_x
-        $g_scrollVel[1] += $deltaY*$g_sensitivity_y
-        $g_scrollAccu[0] -= $deltaX
-        $g_scrollAccu[1] -= $deltaY
-     Else
-        If $g_flickMode Then 
-           $g_scrollAccu[0]=0
-           $g_scrollAccu[1]=0
-        Else
-           Return
-        EndIf
-     EndIf
-     Local $dt = $ticks/$qpf
-     Local $mu = $g_damping
-     Local $f0 = Exp(-$dt * $mu)
-     Local $f1 = 0=$mu ? $dt : (1-$f0) / $mu
-     SendScroll($f1*$g_scrollVel[0],-$f1*$g_scrollVel[1])
-     $g_scrollVel[0] *= $f0
-     $g_scrollVel[1] *= $f0
-     If $g_scrollVel[0]*$g_scrollVel[0]+$g_scrollVel[1]*$g_scrollVel[1] < 0.25 Then 
-        $g_scrollVel[0] = 0 
-        $g_scrollVel[1] = 0
-     EndIf 
+    EndIf
+
+    Const $dx = $wkr_scrollAccu[0]
+    Const $dy = $wkr_scrollAccu[1]
+    $wkr_scrollVel[0] += $dx * $wkr_sens_x
+    $wkr_scrollVel[1] += $dy * $wkr_sens_y
+    $wkr_scrollAccu[0] -= $dx
+    $wkr_scrollAccu[1] -= $dy
+
+    Const $dt = ($qpc - $wkr_last_send_time) / $qpf
+    Const $mu = $wkr_damp
+    Const $f0 = 0 == $mu ? 1.0 : Exp(-$dt * $mu)
+    Const $f1 = 0 == $mu ? $dt : (1 - $f0) / $mu
+
+    WKR_FlushScroll( $f1 * $wkr_scrollVel[0] , -$f1 * $wkr_scrollVel[1] )
+
+    $wkr_scrollVel[0] *= $f0
+    $wkr_scrollVel[1] *= $f0
+
+    If $wkr_scrollVel[0]*$wkr_scrollVel[0] + $wkr_scrollVel[1]*$wkr_scrollVel[1] < 0.25 Then 
+        $wkr_scrollVel[0] = 0 
+        $wkr_scrollVel[1] = 0
+    EndIf
+
+    $wkr_last_send_time = $qpc
 EndFunc
 
-Func SendScroll($deltaX,$deltaY)
-     Local Static $residue = [0,0]
-     $residue[0] += $deltaX
-     $residue[1] += $deltaY
-     Local $multipleX = Int($residue[0]/$g_threshold_x) , $multipleY = Int($residue[1]/$g_threshold_y)
-     Local $sendX = 0 , $sendY = 0
-     If $multipleX<>0 Then
-        $sendX = $multipleX*$g_threshold_x
+Func WKR_FlushScroll($dx, $dy)
+    Static $residue = [0, 0]
+
+    $residue[0] += $dx
+    $residue[1] += $dy
+
+    Const $multipleX = Int($residue[0] / $wkr_thresh_x) 
+    Const $multipleY = Int($residue[1] / $wkr_thresh_y)
+
+    Local $sendX = 0 
+    If $multipleX <> 0 Then
+        $sendX = $multipleX * $wkr_thresh_x
         $residue[0] -= $sendX
-     EndIf
-     If $multipleY<>0 Then
-        $sendY = $multipleY*$g_threshold_y
+    EndIf
+
+    Local $sendY = 0
+    If $multipleY <> 0 Then
+        $sendY = $multipleY * $wkr_thresh_y
         $residue[1] -= $sendY
-     EndIf
-     If $g_thinkMode Then 
+    EndIf
+
+    If $wkr_think Then 
         If Abs($sendX) > Abs($sendY) Then 
-           $sendY = 0
-           $residue[1] = 0
+            $sendY = 0
+            $residue[1] = 0
         Else 
-           $sendX = 0
-           $residue[0] = 0
+            $sendX = 0
+            $residue[0] = 0
         EndIf
-     EndIf
-     If $sendX<>0 or $sendY<>0 Then 
-        If $g_cancel_pending Then 
-           $g_cancel_pending = False
-           SendCancel()
+    EndIf
+
+    If $sendX <> 0 or $sendY <> 0 Then 
+        If $wkr_cancel_pending Then 
+            $wkr_cancel_pending = False
+            SendCancel()
         EndIf
-        ScrollMouseXY($sendX,$sendY)
-     EndIf
+        ScrollMouseXY($sendX, $sendY)
+    EndIf
 EndFunc
 
-Func ScrollMouseXY($dx,$dy)
-     Local Static $SIZE = DllStructGetSize(DllStructCreate('dword;struct;long;long;dword;dword;dword;ulong_ptr;endstruct;'))
-     Local Static $arr = DllStructCreate('byte[' & $SIZE*2 & ']')
-     Local Static $ptr = DllStructGetPtr($arr)
-     Local Static $yData = DllStructCreate('dword type;struct;long;long;dword data;dword flag;dword;ulong_ptr;endstruct;', $ptr)
-     Local Static $xData = DllStructCreate('dword type;struct;long;long;dword data;dword flag;dword;ulong_ptr;endstruct;', $ptr+$SIZE)
-     Local Static $_ = SetupScrollData($xData,$yData)
-     Local $count = ($dx?1:0)+($dy?1:0)
-     Local $addr = $dy ? $ptr : $ptr+$SIZE
-     DllStructSetData($yData,'data',$dy)
-     DllStructSetData($xData,'data',$dx)
-     DllCall( $user32dll, 'uint', 'SendInput', 'uint', $count, 'struct*', $addr, 'int', $SIZE )
+Func ScrollMouseXY($dx, $dy)
+    Static $size, $ptr, $x, $y
+    Static $buf = NewScrollXY($size, $ptr, $x, $y)
+
+    Const $count = ( $dx ? 1 : 0 ) + ( $dy ? 1 : 0 )
+    Const $addr = $dy ? $ptr : $ptr + $size
+
+    $y.data = $dy
+    $x.data = $dx
+
+    DllCall($user32dll, "uint", "SendInput", "uint", $count, "ptr", $addr, "int", $size)
 EndFunc
 
-Func SetupScrollData($xData,$yData)
-     DllStructSetData($xData,'type',0)
-     DllStructSetData($xData,'flag',0x1000)
-     DllStructSetData($yData,'type',0)
-     DllStructSetData($yData,'flag',0x0800)
+Func NewScrollXY(ByRef $size, ByRef $ptr, ByRef $x, ByRef $y)
+    Const $tag = "dword type;struct;long;long;dword data;dword flag;dword;ulong_ptr info;endstruct;"
+    $size = DllStructGetSize(DllStructCreate($tag))
+
+    Const $buf = DllStructCreate("byte[" & $size * 2 & "]")
+    $ptr = DllStructGetPtr($buf)
+
+    $y = DllStructCreate($tag, $ptr)
+    $y.type = 0
+    $y.flag = 0x0800
+
+    $x = DllStructCreate($tag, $ptr + $size)
+    $x.type = 0
+    $x.flag = 0x1000
+
+    Return $buf
 EndFunc
