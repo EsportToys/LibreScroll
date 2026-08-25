@@ -1,5 +1,5 @@
 #NoTrayIcon
-
+Const $MAGIC_WORD = 0x53534150
 Const $user32dll = DllOpen("user32.dll")
 Const $kernel32dll = DllOpen("kernel32.dll")
 Const $qpf = DllCall($kernel32dll, "bool", "QueryPerformanceFrequency", "int64*", Null)[1]
@@ -118,7 +118,7 @@ Func DLG_UpdateTip()
 EndFunc
 
 Func DLG_Info()
-    MsgBox(0, "About LibreScroll v1.2", "Visit https://github.com/EsportToys/LibreScroll for more info.")
+    MsgBox(0, "About LibreScroll v1.3-autoit", "Visit https://github.com/EsportToys/LibreScroll for more info.")
 EndFunc
 
 Func DLG_Quit()
@@ -156,13 +156,16 @@ Func WorkerMain($args)
     Global Const $wkr_thresh_y = ($args[6] > 1) ? $args[6] : 1
     Global Const $wkr_think = Number($args[7]) ? True : False
 
+    Global Const $wkr_timer_fn = DllCallbackGetPtr(DllCallbackRegister("WKR_TimerProc", "none", "hwnd;uint;uint_ptr;dword"))
+    Global Const $wkr_hooker_fn = DllCallbackGetPtr(DllCallbackRegister("WKR_HookerProc", "lresult", "int;wparam;lparam"))
+
+    Global $wkr_hooker_handle = Null
     Global $wkr_clipRect = DllStructCreate("long x1;long y1;long x2;long y2;");
     Global $wkr_scrollVel = [0, 0]
     Global $wkr_scrollAccu = [0, 0]
     Global $wkr_trigger_isDown = False
-    Global $wkr_cancel_pending = False
+    Global $wkr_scroll_pending = False
     Global $wkr_last_send_time = 0
-    Global $wkr_timer_fn = DllCallbackGetPtr(DllCallbackRegister("WKR_TimerProc", "none", "hwnd;uint;uint_ptr;dword"))
 
     DllCall($user32dll, "bool", "SetProcessDPIAware")
 
@@ -173,10 +176,36 @@ Func WorkerMain($args)
     $raw.flags = 256
     $raw.target = GUICreate("")
     DllCall($user32dll, "bool", "RegisterRawInputDevices", "struct*", $raw, "uint", 1, "uint", $rawSize)
-    GUIRegisterMsg(0x00FF, WKR_Rawinput)  
+    GUIRegisterMsg(0x00FF, WKR_Rawinput)
+
+    WKR_SpawnHooker()
+    OnAutoItExitRegister(WKR_KillHooker)
 
     Do 
     Until -3 == GUIGetMsg()
+EndFunc
+
+Func WKR_SpawnHooker()
+    If $wkr_hooker_handle == Null Then
+        $wkr_hooker_handle = DllCall($user32dll, "handle", "SetWindowsHookExW", "int", 14, "ptr", $wkr_hooker_fn, "ptr", Null, "dword", 0)[0]
+    EndIf
+EndFunc
+
+Func WKR_KillHooker()
+    If $wkr_hooker_handle Then
+        DllCall($user32dll, "bool", "UnhookWindowsHookEx", "handle", $wkr_hooker_handle)
+        $wkr_hooker_handle = Null
+    EndIf
+EndFunc
+
+Func WKR_HookerProc($nCode, $wParam, $lParam)
+    If $nCode == 0 and ($wParam == 0x207 Or $wParam == 0x208) Then
+        Const $inf = DllStructCreate("struct;long x; long y;endstruct;dword mouseData;dword flags;dword time;ulong_ptr dwExtraInfo;", $lParam)
+        If (0 == BitAND(3, $inf.flags) Or Not ($MAGIC_WORD == $inf.dwExtraInfo)) Then
+            Return 1
+        EndIf
+    EndIf
+    Return DllCall($user32dll, "lresult", "CallNextHookEx", "ptr", Null, "int", $nCode, "wparam", $wParam, "lparam", $lParam)[0]
 EndFunc
 
 Func WKR_Rawinput($h, $m, $w, $l)
@@ -193,19 +222,24 @@ Func WKR_Rawinput($h, $m, $w, $l)
     If $raw.hDevice Then
         If $raw.ButtonFlags Then
             If BitAnd(32, $raw.ButtonFlags) Then
+                If $wkr_scroll_pending Then
+                    SendMB3()
+                EndIf
                 $wkr_trigger_isDown = False
-                $wkr_cancel_pending = False
+                $wkr_scroll_pending = False
                 $wkr_scrollVel[0] = 0
                 $wkr_scrollVel[1] = 0
                 DllCall($user32dll, "bool", "ClipCursor", "struct*", Null)
                 DllCall($user32dll, "bool", "KillTimer", "hwnd", $h, "uint_ptr", 0x420)
+                WKR_SpawnHooker()
             ElseIf BitAnd(16, $raw.ButtonFlags) Then
+                WKR_KillHooker()
                 $wkr_scrollAccu[0] = 0
                 $wkr_scrollAccu[1] = 0
                 $wkr_scrollVel[0] = 0
                 $wkr_scrollVel[1] = 0
                 $wkr_trigger_isDown = True
-                $wkr_cancel_pending = True
+                $wkr_scroll_pending = True
                 $wkr_last_send_time = $qpc
                 DllCall($user32dll, "bool", "GetCursorPos", "struct*", $wkr_clipRect)
                 $wkr_clipRect.x2 = $wkr_clipRect.x1 + 1
@@ -224,28 +258,6 @@ Func WKR_Rawinput($h, $m, $w, $l)
     EndIf
 
     Return 0
-EndFunc
-
-Func SendCancel()
-    Local Static $tag = 'dword; struct; word; word; dword; dword; ulong_ptr; byte[8]; endstruct;'
-    Local Static $size = DllStructGetSize(DllStructCreate($tag))
-    Local Static $buf = DllStructCreate('byte[' & $size * 2 & ']')
-    Local Static $ptr = DllStructGetPtr($buf)
-    Local Static $_ = SetupCancelData($tag, $ptr, $ptr + $size)
-    DllCall($user32dll, 'uint', 'SendInput', 'uint', 2, 'struct*', $ptr, 'int', $size)
-EndFunc
-
-Func SetupCancelData($tag, $ptrdn, $ptrup)
-    Local $keydn = DllStructCreate($tag, $ptrdn)
-    DllStructSetData($keydn, 1, 1)
-    DllStructSetData($keydn, 2, 0)
-    DllStructSetData($keydn, 3, 0)
-    DllStructSetData($keydn, 4, 0)
-    Local $keyup = DllStructCreate($tag, $ptrup)
-    DllStructSetData($keyup, 1, 1)
-    DllStructSetData($keyup, 2, 0)
-    DllStructSetData($keyup, 3, 0)
-    DllStructSetData($keyup, 4, 2)
 EndFunc
 
 Func WKR_TimerProc($hWnd, $uMsg, $idEvent, $sysTick)
@@ -318,9 +330,8 @@ Func WKR_FlushScroll($dx, $dy)
     EndIf
 
     If $sendX <> 0 or $sendY <> 0 Then 
-        If $wkr_cancel_pending Then 
-            $wkr_cancel_pending = False
-            SendCancel()
+        If $wkr_scroll_pending Then 
+            $wkr_scroll_pending = False
         EndIf
         ScrollMouseXY($sendX, $sendY)
     EndIf
@@ -353,6 +364,32 @@ Func NewScrollXY(ByRef $size, ByRef $ptr, ByRef $x, ByRef $y)
     $x = DllStructCreate($tag, $ptr + $size)
     $x.type = 0
     $x.flag = 0x1000
+
+    Return $buf
+EndFunc
+
+Func SendMB3()
+    Static $size, $ptr
+    Static $buf = NewMB3($size, $ptr)
+    DllCall($user32dll, "uint", "SendInput", "uint", 2, "ptr", $ptr, "int", $size)
+EndFunc
+
+Func NewMB3(ByRef $size, ByRef $ptr)
+    Const $tag = "dword type;struct;long;long;dword data;dword flag;dword;ulong_ptr info;endstruct;"
+    $size = DllStructGetSize(DllStructCreate($tag))
+
+    Const $buf = DllStructCreate("byte[" & $size * 2 & "]")
+    $ptr = DllStructGetPtr($buf)
+
+    Local $buttonDn = DllStructCreate($tag, $ptr)
+    $buttonDn.type = 0
+    $buttonDn.flag = 0x0020
+    $buttonDn.info = $MAGIC_WORD
+
+    Local $buttonUp = DllStructCreate($tag, $ptr + $size)
+    $buttonUp.type = 0
+    $buttonUp.flag = 0x0040
+    $buttonUp.info = $MAGIC_WORD
 
     Return $buf
 EndFunc
