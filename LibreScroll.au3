@@ -118,7 +118,7 @@ Func DLG_UpdateTip()
 EndFunc
 
 Func DLG_Info()
-    MsgBox(0, "About LibreScroll v1.3-autoit", "Visit https://github.com/EsportToys/LibreScroll for more info.")
+    MsgBox(0, "About LibreScroll v1.4-autoit", "Visit https://github.com/EsportToys/LibreScroll for more info.")
 EndFunc
 
 Func DLG_Quit()
@@ -157,9 +157,7 @@ Func WorkerMain($args)
     Global Const $wkr_think = Number($args[7]) ? True : False
 
     Global Const $wkr_timer_fn = DllCallbackGetPtr(DllCallbackRegister("WKR_TimerProc", "none", "hwnd;uint;uint_ptr;dword"))
-    Global Const $wkr_hooker_fn = DllCallbackGetPtr(DllCallbackRegister("WKR_HookerProc", "lresult", "int;wparam;lparam"))
 
-    Global $wkr_hooker_handle = Null
     Global $wkr_clipRect = DllStructCreate("long x1;long y1;long x2;long y2;");
     Global $wkr_scrollVel = [0, 0]
     Global $wkr_scrollAccu = [0, 0]
@@ -178,34 +176,43 @@ Func WorkerMain($args)
     DllCall($user32dll, "bool", "RegisterRawInputDevices", "struct*", $raw, "uint", 1, "uint", $rawSize)
     GUIRegisterMsg(0x00FF, WKR_Rawinput)
 
-    WKR_SpawnHooker()
-    OnAutoItExitRegister(WKR_KillHooker)
+    Const $hookdll = DllCall($kernel32dll, "handle", "LoadLibraryW", "wstr", @ScriptDir & "\hook.dll")
+    If @error Then
+        MsgBox(0, "LoadLibrary error", @error)
+    ElseIf $hookdll[0] == Null Then
+        MsgBox(0, "LoadLibrary error", "hook.dll not found")
+        Exit
+    EndIf
+
+    Const $hookptr = DllCall($kernel32dll, "ptr", "GetProcAddress", "handle", $hookdll[0], "str", "hookMain")
+    If @error Then 
+        MsgBox(0, "GetProcAddress error", @error)
+        Exit
+    ElseIf $hookptr[0] == Null Then
+        MsgBox(0, "GetProcAddress error", "proc not found")
+        Exit
+    EndIf
+
+    Const $hookhandle = DllCall($kernel32dll, "handle", "CreateThread", _
+        "struct*", Null, _
+        "ulong_ptr", 0, _
+        "ptr", $hookptr[0], _
+        "handle", Null, _
+        "dword", 0, _
+        "dword*", Null _
+    )
+    If @error Then
+        MsgBox(0, "CreateThread error", @error)
+        Exit
+    ElseIf $hookhandle == Null Then
+        MsgBox(0, "CreateThread error", "thread not created")
+        Exit
+    EndIf
+
+    DllCall($kernel32dll, "bool", "SetThreadPriority", "handle", $hookhandle[0], "int", 15)
 
     Do 
     Until -3 == GUIGetMsg()
-EndFunc
-
-Func WKR_SpawnHooker()
-    If $wkr_hooker_handle == Null Then
-        $wkr_hooker_handle = DllCall($user32dll, "handle", "SetWindowsHookExW", "int", 14, "ptr", $wkr_hooker_fn, "ptr", Null, "dword", 0)[0]
-    EndIf
-EndFunc
-
-Func WKR_KillHooker()
-    If $wkr_hooker_handle Then
-        DllCall($user32dll, "bool", "UnhookWindowsHookEx", "handle", $wkr_hooker_handle)
-        $wkr_hooker_handle = Null
-    EndIf
-EndFunc
-
-Func WKR_HookerProc($nCode, $wParam, $lParam)
-    If $nCode == 0 and ($wParam == 0x207 Or $wParam == 0x208) Then
-        Const $inf = DllStructCreate("struct;long x; long y;endstruct;dword mouseData;dword flags;dword time;ulong_ptr dwExtraInfo;", $lParam)
-        If (0 == BitAND(3, $inf.flags) Or Not ($MAGIC_WORD == $inf.dwExtraInfo)) Then
-            Return 1
-        EndIf
-    EndIf
-    Return DllCall($user32dll, "lresult", "CallNextHookEx", "ptr", Null, "int", $nCode, "wparam", $wParam, "lparam", $lParam)[0]
 EndFunc
 
 Func WKR_Rawinput($h, $m, $w, $l)
@@ -231,9 +238,7 @@ Func WKR_Rawinput($h, $m, $w, $l)
                 $wkr_scrollVel[1] = 0
                 DllCall($user32dll, "bool", "ClipCursor", "struct*", Null)
                 DllCall($user32dll, "bool", "KillTimer", "hwnd", $h, "uint_ptr", 0x420)
-                WKR_SpawnHooker()
             ElseIf BitAnd(16, $raw.ButtonFlags) Then
-                WKR_KillHooker()
                 $wkr_scrollAccu[0] = 0
                 $wkr_scrollAccu[1] = 0
                 $wkr_scrollVel[0] = 0

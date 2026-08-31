@@ -1,0 +1,1 @@
+zig build-lib hook.zig -O ReleaseSmall -target x86_64-windows-gnu -dynamic -fdll-export-fns -fsingle-threaded -fno-entry
