@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .unwind_tables = .none,
+        .single_threaded = true,
     });
     exe_mod.addWin32ResourceFile(.{ .file = b.path("main.rc") });
 
@@ -19,7 +20,8 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
         .win32_manifest = manifest_file ,
     });
-    exe.subsystem = .Windows;
+    exe.subsystem = @enumFromInt(1); // windows subsystem
+
     b.installArtifact(exe);
 
     const zip_name = "LibreScroll-" ++ @import("main.zig").LIBRE_SCROLL_VERSION_TEXT ++ ".zip";

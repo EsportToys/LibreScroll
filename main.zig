@@ -664,7 +664,7 @@ const NOTIFYICONDATAA = extern struct {
     uTimeout: u32 = 0, // uFlags 16, or uVersion if calling with SETVERSION
     szInfoTitle: [64]u8 = @splat(0), // balloon title
     dwInfoFlags: u32 = 0, // balloon options
-    guidItem: GUID = @bitCast(@as(u128, 0)), // uFlags 32
+    guidItem: GUID = @as(*const GUID, @ptrCast(&@as(u128, 0))).*, // uFlags 32
     hBalloonIcon: ?HICON = null, // custom balloon title icon (require dwInfoFlags 0x4 bit)
 };
 
@@ -672,7 +672,7 @@ const NOTIFYICONIDENTIFIER = extern struct {
     cbSize: u32 = @sizeOf(NOTIFYICONIDENTIFIER),
     hWnd: HWND,
     uID: u32,
-    guidItem: GUID = @bitCast(@as(u128, 0)),
+    guidItem: GUID = @as(*const GUID, @ptrCast(&@as(u128, 0))).*,
 };
 
 const GUID = extern struct {
