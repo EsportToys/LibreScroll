@@ -385,7 +385,7 @@ const State = struct {
     is_scrolling: bool = false,
     scroll_pending: bool = false,
 
-    fn step(state: *State, acu: Vec2i, tick: u64, freq: u64) ?Vec2f {
+    fn step(state: *State, acu: Vec2i, tick: u64, freq: u64) ?[2]f32 {
         if (state.is_scrolling) {
             var current_rect: [4]i32 = undefined;
             _ = GetClipCursor(&current_rect);
