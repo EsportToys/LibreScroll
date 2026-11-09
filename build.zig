@@ -682,41 +682,6 @@ const GUID = extern struct {
     Data4: [8]u8 = @splat(0),
 };
 
-const std = @import("std");
-
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const res = b.addWriteFiles();
-    const manifest_file = res.add("main.manifest", manifest);
-    const resource_file = res.add("main.rc", resource);
-
-    const exe_mod = b.createModule(.{
-        .root_source_file = b.path("build.zig"),
-        .target = target,
-        .optimize = optimize,
-        .single_threaded = true,
-        .unwind_tables = .none,
-    });
-    exe_mod.addWin32ResourceFile(.{ .file = resource_file });
-
-    const exe = b.addExecutable(.{
-        .name = "LibreScroll",
-        .root_module = exe_mod,
-        .win32_manifest = manifest_file ,
-    });
-    exe.subsystem = @enumFromInt(1); // windows subsystem
-    b.installArtifact(exe);
-
-    const zip_name = "LibreScroll-" ++ LIBRE_SCROLL_VERSION_TEXT ++ ".zip";
-    const release_build = b.addSystemCommand(&.{ "zig", "build", "--release=small", "-Dtarget=x86_64-windows-gnu" });
-    const release_zip = b.addSystemCommand(&.{ "tar", "-caf", "zig-out/" ++ zip_name, "-C", "zig-out/bin", "LibreScroll.exe" });
-    const release_step = b.step("release", "build release artifact");
-    release_zip.step.dependOn(&release_build.step);
-    release_step.dependOn(&release_zip.step);
-}
-
 const manifest = 
 \\<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 \\<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
@@ -787,3 +752,38 @@ const resource =
 \\    DEFPUSHBUTTON   "Apply",            106,    72, 114,    69, 14
 \\}
 ;
+
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const res = b.addWriteFiles();
+    const manifest_file = res.add("main.manifest", manifest);
+    const resource_file = res.add("main.rc", resource);
+
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("build.zig"),
+        .target = target,
+        .optimize = optimize,
+        .single_threaded = true,
+        .unwind_tables = .none,
+    });
+    exe_mod.addWin32ResourceFile(.{ .file = resource_file });
+
+    const exe = b.addExecutable(.{
+        .name = "LibreScroll",
+        .root_module = exe_mod,
+        .win32_manifest = manifest_file ,
+    });
+    exe.subsystem = @enumFromInt(1); // windows subsystem
+    b.installArtifact(exe);
+
+    const zip_name = "LibreScroll-" ++ LIBRE_SCROLL_VERSION_TEXT ++ ".zip";
+    const release_build = b.addSystemCommand(&.{ "zig", "build", "--release=small", "-Dtarget=x86_64-windows-gnu" });
+    const release_zip = b.addSystemCommand(&.{ "tar", "-caf", "zig-out/" ++ zip_name, "-C", "zig-out/bin", "LibreScroll.exe" });
+    const release_step = b.step("release", "build release artifact");
+    release_zip.step.dependOn(&release_build.step);
+    release_step.dependOn(&release_zip.step);
+}
