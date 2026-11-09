@@ -687,17 +687,19 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const res = b.addWriteFiles();
+    const manifest_file = res.add("main.manifest", manifest);
+    const resource_file = res.add("main.rc", resource);
+
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("build.zig"),
         .target = target,
         .optimize = optimize,
-        .unwind_tables = .none,
         .single_threaded = true,
+        .unwind_tables = .none,
     });
-    exe_mod.addWin32ResourceFile(.{ .file = b.path("main.rc") });
-
-    const res = b.addWriteFiles();
-    const manifest_file = res.add("main.manifest", manifest);
+    exe_mod.addWin32ResourceFile(.{ .file = resource_file });
 
     const exe = b.addExecutable(.{
         .name = "LibreScroll",
@@ -731,4 +733,57 @@ const manifest =
 \\        </dependentAssembly>
 \\    </dependency>
 \\</assembly>
+;
+
+const resource = 
+\\menu MENU {
+\\    POPUP "User" {
+\\        MENUITEM "Start Thread", 105
+\\        MENUITEM "Restart as admin", 103
+\\        MENUITEM "About LibreScroll", 102
+\\        MENUITEM "Options", 101
+\\        MENUITEM "Quit", 100
+\\    }
+\\    POPUP "Admin" {
+\\        MENUITEM "Start Thread", 105
+\\        MENUITEM "About LibreScroll", 102
+\\        MENUITEM "Options", 101
+\\        MENUITEM "Quit", 100
+\\    }
+\\    POPUP "User" {
+\\        MENUITEM "Stop Thread", 104
+\\        MENUITEM "Restart as admin", 103
+\\        MENUITEM "About LibreScroll", 102
+\\        MENUITEM "Options", 101
+\\        MENUITEM "Quit", 100
+\\    }
+\\    POPUP "Admin" {
+\\        MENUITEM "Stop Thread", 104
+\\        MENUITEM "About LibreScroll", 102
+\\        MENUITEM "Options", 101
+\\        MENUITEM "Quit", 100
+\\    }
+\\}
+\\
+\\
+\\CFGDLG DIALOGEX 0x8000, 0x8000, 143, 130
+\\STYLE 0x00C80048
+\\CAPTION "LibreScroll options"
+\\FONT 8.5, "MS Shell Dlg"
+\\{
+\\    CTEXT           "Friction",         -1,     1,  5 ,     69, 12
+\\    CTEXT           "Y-Sensitivity",    -1,     1,  21,     69, 12
+\\    CTEXT           "X-Sensitivity",    -1,     1,  37,     69, 12
+\\    CTEXT           "Minimum Y Step",   -1,     1,  53,     69, 12
+\\    CTEXT           "Minimum X Step",   -1,     1,  69,     69, 12
+\\    EDITTEXT                            0x4001, 71, 3,      69, 12, 0x2000
+\\    EDITTEXT                            0x4002, 71, 19,     69, 12
+\\    EDITTEXT                            0x4003, 71, 35,     69, 12
+\\    EDITTEXT                            0x4004, 71, 51,     69, 12, 0x2000
+\\    EDITTEXT                            0x4005, 71, 67,     69, 12, 0x2000
+\\    AUTOCHECKBOX    "Flick mode",       0x4006, 71, 83,     69, 12
+\\    AUTOCHECKBOX    "ThinkPad mode",    0x4007, 71, 99,     69, 12
+\\    PUSHBUTTON      "Pause",            104,    2 , 114,    69, 14
+\\    DEFPUSHBUTTON   "Apply",            106,    72, 114,    69, 14
+\\}
 ;
