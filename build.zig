@@ -36,26 +36,23 @@ pub fn main() void {
     _ = SetWindowLongPtrA(hSensY, -21, SetWindowLongPtrA(hSensY, -4, @bitCast(@intFromPtr(&inputProc))));
     _ = SetWindowLongPtrA(hSensX, -21, SetWindowLongPtrA(hSensX, -4, @bitCast(@intFromPtr(&inputProc))));
 
-    const ico = ico: {
-        const cpl = LoadLibraryA("main.cpl") orelse break :ico null;
-        defer _ = FreeLibrary(cpl);
-        break :ico LoadIconA(cpl, @ptrFromInt(608));
-    };
-
-    _ = SendMessageA(hwndTray, 0x0080, 0, @bitCast(@intFromPtr(ico))); // set small icon
-    _ = SendMessageA(hwndTray, 0x0080, 1, @bitCast(@intFromPtr(ico))); // set big icon
-
-    var tray_data: NOTIFYICONDATAA = .{
-        .hWnd = hwndTray,
-        .uID = TRAY_UID,
-        .uFlags = 0x8F,
-        .uCallbackMessage = WM_TRAY,
-        .hIcon = ico,
-        .uTimeout = 4,
-        .dwState = 0,
-        .dwStateMask = 1,
-    };
+    var tray_data: NOTIFYICONDATAA = .{};
+    tray_data.hWnd = hwndTray;
+    tray_data.uID = TRAY_UID;
+    tray_data.uFlags = 0x8F;
+    tray_data.uCallbackMessage = WM_TRAY;
+    tray_data.uTimeout = 4;
     tray_data.szTip[0..12].* = "LibreScroll\x00".*;
+    tray_data.dwState = 0;
+    tray_data.dwStateMask = 1;
+
+    if (LoadLibraryA("main.cpl")) |cpl| {
+        defer _ = FreeLibrary(cpl);
+        const ico = @intFromPtr(LoadIconA(cpl, @ptrFromInt(608)));
+        _ = SendMessageA(hwndTray, 0x0080, 0, @bitCast(ico)); // set small icon
+        _ = SendMessageA(hwndTray, 0x0080, 1, @bitCast(ico)); // set big icon
+        tray_data.hIcon = @ptrFromInt(ico);
+    }
 
     if (0 == Shell_NotifyIconA(.ADD, &tray_data)) return;
     defer _ = Shell_NotifyIconA(.DELETE, &tray_data);
@@ -261,8 +258,21 @@ fn hookMain(_: ?*anyopaque) callconv(.winapi) u32 {
 fn rawMain(_: ?*anyopaque) callconv(.winapi) u32 {
     defer _ = PostThreadMessageA(main_thread_id, WM_RAW_STOPPED, 0, 0);
     if (.NULL == SetThreadDpiAwarenessContext(.PER_MONITOR_AWARE_V2)) return 0;
-    const HWND_MESSAGE: HWND = @ptrFromInt(~@as(usize, 2));
-    const hwnd = CreateWindowExA(0, "Message", null, 0, 0, 0, 0, 0, HWND_MESSAGE, null, null, null) orelse return 0;
+    const HWND_MESSAGE: usize = @bitCast(@as(isize, -3));
+    const hwnd = CreateWindowExA(
+        0,
+        "Message",
+        null,
+        0,
+        0,
+        0,
+        0,
+        0,
+        @ptrFromInt(HWND_MESSAGE),
+        null,
+        null,
+        null,
+    ) orelse return 0;
     defer _ = DestroyWindow(hwnd);
 
     if (0 == RegisterRawInputDevices(&.{.{
