@@ -355,10 +355,11 @@ fn rawMain(_: ?*anyopaque) callconv(.winapi) u32 {
                 state.vel = @splat(0);
                 state.is_scrolling = true;
                 state.scroll_pending = true;
-                _ = GetCursorPos(state.rect[0..2]);
-                state.rect[2] = state.rect[0] + 1;
-                state.rect[3] = state.rect[1] + 1;
-                _ = ClipCursor(&state.rect);
+                const ref: *[4]i32 = @ptrCast(&state.rect);
+                _ = GetCursorPos(ref[0..2]);
+                ref[2] = ref[0] + 1;
+                ref[3] = ref[1] + 1;
+                _ = ClipCursor(ref);
             } else if (global_config.flick != 0 and !state.is_scrolling) {
                 state.vel = @splat(0); // in flick mode, any mouse action besides the above should immediately halt
                 if (0 != KillTimer(null, timer)) timer = 0;
@@ -378,7 +379,7 @@ fn rawMain(_: ?*anyopaque) callconv(.winapi) u32 {
 const State = struct {
     vel: [2]f32 = @splat(0),
     res: [2]f32 = @splat(0),
-    rect: [4]i32 = @splat(0),
+    rect: u128 = 0,
     is_scrolling: bool = false,
     scroll_pending: bool = false,
 
@@ -387,13 +388,8 @@ const State = struct {
             state.vel[0] += @floatFromInt(global_config.sensX * acu[0]);
             state.vel[1] += @floatFromInt(global_config.sensY * acu[1]);
             var buf: u128 = undefined;
-            const ref: *[4]i32 = @ptrCast(&buf);
-            _ = GetClipCursor(ref);
-            ref[0] ^= state.rect[0];
-            ref[1] ^= state.rect[1];
-            ref[2] ^= state.rect[2];
-            ref[3] ^= state.rect[3];
-            if (0 != buf) _ = ClipCursor(&state.rect);
+            _ = GetClipCursor(@ptrCast(&buf));
+            if (state.rect != buf) _ = ClipCursor(@ptrCast(&state.rect));
         } else if (global_config.flick == 0) {
             return null;
         }
