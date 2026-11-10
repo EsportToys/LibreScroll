@@ -13,9 +13,6 @@ var raw_thread_id: u32 = undefined;
 var raw_thread_handle: ?*anyopaque = null;
 var raw_thread_pending_restart = false;
 
-const Vec2f = @Vector(2, f32);
-const Vec2i = @Vector(2, i32);
-
 const LIBRE_SCROLL_VERSION_TEXT = "v2.2.1";
 const MAGIC_WORD: [8]u8 = "PASS\x00\x00\x00\x00".*;
 const WM_TRAY = 0x8001;
@@ -55,11 +52,10 @@ pub fn main() void {
         .uCallbackMessage = WM_TRAY,
         .hIcon = ico,
         .uTimeout = 4,
-        .szTip = @splat(0),
         .dwState = 0,
         .dwStateMask = 1,
     };
-    tray_data.szTip[0..11].* = "LibreScroll".*;
+    tray_data.szTip[0..12].* = "LibreScroll\x00".*;
 
     if (0 == Shell_NotifyIconA(.ADD, &tray_data)) return;
     defer _ = Shell_NotifyIconA(.DELETE, &tray_data);
@@ -313,7 +309,7 @@ fn rawMain(_: ?*anyopaque) callconv(.winapi) u32 {
     var data: RAWINPUT.MOUSE = undefined;
     var state: State = .{};
     var timer: usize = 0;
-    var scroll_acu: Vec2i = @splat(0);
+    var scroll_acu: [2]i32 = @splat(0);
     var unclip_pending = false;
     var msg: MSG = undefined;
     while (GetMessageA(&msg, null, 0, 0) > 0) {
@@ -333,7 +329,8 @@ fn rawMain(_: ?*anyopaque) callconv(.winapi) u32 {
                 break :_;
             }
             if (flags == 0) { // movement only
-                scroll_acu += .{ data.data.lLastX, data.data.lLastY };
+                scroll_acu[0] += data.data.lLastX;
+                scroll_acu[1] += data.data.lLastY;
             } else if (32 == 32 & flags) {
                 if (global_config.flick == 0) {
                     if (0 != KillTimer(null, timer)) timer = 0;
@@ -379,71 +376,73 @@ fn rawMain(_: ?*anyopaque) callconv(.winapi) u32 {
 }
 
 const State = struct {
-    vel: Vec2f = @splat(0),
-    res: Vec2f = @splat(0),
+    vel: [2]f32 = @splat(0),
+    res: [2]f32 = @splat(0),
     rect: [4]i32 = @splat(0),
     is_scrolling: bool = false,
     scroll_pending: bool = false,
 
-    fn step(state: *State, acu: Vec2i, tick: u64, freq: u64) ?[2]f32 {
+    fn step(state: *State, acu: [2]i32, tick: u64, freq: u64) ?[2]f32 {
         if (state.is_scrolling) {
-            var current_rect: [4]i32 = undefined;
-            _ = GetClipCursor(&current_rect);
-            if (current_rect[0] != state.rect[0] or
-                current_rect[1] != state.rect[1] or
-                current_rect[2] != state.rect[2] or
-                current_rect[3] != state.rect[3]) _ = ClipCursor(&state.rect);
-            var delta: Vec2f = .{
-                @floatFromInt(global_config.sensX), 
-                @floatFromInt(global_config.sensY),
-            };
-            delta *= @floatFromInt(acu);
-            state.vel += delta;
+            state.vel[0] += @floatFromInt(global_config.sensX * acu[0]);
+            state.vel[1] += @floatFromInt(global_config.sensY * acu[1]);
+            var buf: u128 = undefined;
+            const ref: *[4]i32 = @ptrCast(&buf);
+            _ = GetClipCursor(ref);
+            ref[0] ^= state.rect[0];
+            ref[1] ^= state.rect[1];
+            ref[2] ^= state.rect[2];
+            ref[3] ^= state.rect[3];
+            if (0 != buf) _ = ClipCursor(&state.rect);
         } else if (global_config.flick == 0) {
             return null;
         }
-        var dt: f32 = @floatFromInt(tick);
-        dt /= @floatFromInt(freq);
         const mu: f32 = @floatFromInt(global_config.decay);
-        const f0 = @exp(-dt * mu);
-        const f1 = (1 - f0) / mu;
-        var send = state.vel;
-        send *= @splat(f1);
-        state.vel *= @splat(f0);
-        if (@reduce(.Add, state.vel * state.vel) < 1) {
-            state.vel /= @splat(mu);
-            send += state.vel;
+        var tau = mu;
+        tau *= @floatFromInt(tick);
+        tau /= @floatFromInt(freq);
+        tau = @exp(-tau);
+        var send: [2]f32 = @splat((1 - tau) / mu);
+        send[0] *= state.vel[0];
+        send[1] *= state.vel[1];
+        state.vel[0] *= tau;
+        state.vel[1] *= tau;
+        const vv = state.vel[0] * state.vel[0] + state.vel[1] * state.vel[1];
+        if (vv < 1) {
+            state.vel[0] /= mu;
+            state.vel[1] /= mu;
+            send[0] += state.vel[0];
+            send[1] += state.vel[1];
             state.vel = @splat(0);
         }
         return send;
     }
 
-    fn flush(state: *State, delta: Vec2f) void {
-        state.res += delta;
-        const thresh: Vec2f = .{ @floatFromInt(global_config.stepX), @floatFromInt(global_config.stepY) };
-        const batch = thresh * @trunc(state.res / thresh);
-        var send: Vec2i = @intFromFloat(batch);
-        state.res -= batch;
+    fn flush(state: *State, delta: [2]f32) void {
+        const thresh: [2]f32 = .{ @floatFromInt(global_config.stepX), @floatFromInt(global_config.stepY) };
+        state.res[0] += delta[0];
+        state.res[1] += delta[1];
+        var batch: @Vector(2, f32) = state.res;
+        batch /= thresh;
+        batch = @trunc(batch);
+        batch *= thresh;
+        state.res[0] -= batch[0];
+        state.res[1] -= batch[1];
+        var send: [2]i32 = .{ @intFromFloat(batch[0]), @intFromFloat(batch[1]) };
+        const no_x = (0 == send[0]);
+        const no_y = (0 == send[1]);
+        if (no_x and no_y) return;
         if (global_config.think != 0) {
-            if (@abs(send[0]) > @abs(send[1])) {
-                send[1] = 0;
-                state.res[1] = 0;
-            } else {
-                send[0] = 0;
-                state.res[0] = 0;
-            }
+            const clip_axis = @intFromBool(@abs(send[0]) > @abs(send[1]));
+            send[clip_axis] = 0;
+            state.res[clip_axis] = 0;
         }
-        if (0 == send[0] and 0 == send[1]) return;
         const buf: [2]INPUT = .{
             .mi(.{ .mouseData = -send[1], .dwFlags = 0x0800 }),
             .mi(.{ .mouseData =  send[0], .dwFlags = 0x1000 }),
         };
+        _ = INPUT.send(buf[@intFromBool(no_y) .. 1 + @intFromBool(!no_x)]);
         state.scroll_pending = false;
-        if (send[1] != 0) {
-            _ = INPUT.send(buf[0..if (send[0] != 0) 2 else 1]);
-        } else if (send[0] != 0) {
-            _ = INPUT.send(buf[1..]);
-        }
     }
 };
 
