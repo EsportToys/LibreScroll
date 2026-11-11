@@ -758,9 +758,7 @@ const resource =
 \\}
 ;
 
-const std = @import("std");
-
-pub fn build(b: *std.Build) void {
+pub fn build(b: *@import("std").Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
